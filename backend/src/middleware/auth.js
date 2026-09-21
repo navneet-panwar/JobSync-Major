@@ -1,0 +1,24 @@
+const env = require("../config/env");
+const ApiError = require("../utils/ApiError");
+const { verifyToken } = require("../utils/jwt");    
+const User = require("../models/User");
+
+async function auth(req, res, next) {
+    try{
+        const token = req.cookies?.[env.cookieName];
+        if(!token) throw ApiError.unauthorized();
+
+        const payload = verifyToken(token);
+        const user = await User.findById(payload.sub);
+        if(!user) throw ApiError.unauthorized("Session no longer valid");
+
+        req.user = user;
+        next();
+    } catch(err){
+        if(err.name === "JsonWebTokenError" || err.name === "TokenExpiredError"){
+            return next(ApiError.unauthorized("Session no longer valid"));
+        }
+        next(err);
+    }
+}
+module.exports = {requireAuth : auth};
