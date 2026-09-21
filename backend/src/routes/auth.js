@@ -14,7 +14,7 @@ const { validate } = require("../middleware/validate");
 const router = express.Router();
 
 const registerSchema = z.object({
-    email : z.string().trim().min(1).max(80),
+    name : z.string().trim().min(1).max(80),
     email : z.string().trim().toLowerCase().email(),
     password : z.string().min(8).max(128),
 

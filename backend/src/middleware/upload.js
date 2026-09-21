@@ -7,7 +7,7 @@ const upload = multer({
     storage : multer.memoryStorage(),
     limits : { fileSize : MAX_BYTES ,files : 1},
     fileFilter : (req,file,cb) => {
-        if(!file.mimetype !== "application/pdf"){
+        if(file.mimetype !== "application/pdf"){
             return cb(ApiError.badRequest("Only PDF files are allowed"));
         }
         cb(null,true);

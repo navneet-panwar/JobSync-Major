@@ -200,6 +200,22 @@ function buildPrompt({ rawText, targetRole }) {
   ].join("\n");
 }
 
+function isTransientGeminiError(err) {
+  const code = Number(err?.status ?? err?.code ?? err?.response?.status);
+  const message = String(err?.message || "").toLowerCase();
+
+  return (
+    [429, 500, 502, 503, 504].includes(code) ||
+    message.includes("temporarily unavailable") ||
+    message.includes("high demand") ||
+    message.includes("resource exhausted")
+  );
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function callGemini(prompt) {
   const result = await ai.models.generateContent({
     model: env.geminiModel,
@@ -230,7 +246,7 @@ async function analyzeResume({ rawText, targetRole }) {
   const prompt = buildPrompt({ rawText, targetRole });
 
   let lastErr;
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const { text, usage } = await callGemini(prompt);
       const parsed = JSON.parse(text);
@@ -244,7 +260,8 @@ async function analyzeResume({ rawText, targetRole }) {
       };
     } catch (err) {
       lastErr = err;
-      if (attempt === 2) break;
+      if (attempt === 3 || !isTransientGeminiError(err)) break;
+      await wait(attempt * 1000);
     }
   }
 

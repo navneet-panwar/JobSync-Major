@@ -45,3 +45,9 @@ uploads/
 tmp/
 temp/
 coverage/
+
+node_modules
+.env
+dist
+build
+.vscode

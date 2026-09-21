@@ -115,6 +115,20 @@ router.get(
     res.json({ resume, versions });
   })
 );
+
+router.get(
+  "/:id/versions/:versionId",
+  validate(
+    z.object({ id: objectIdSchema, versionId: objectIdSchema }),
+    "params"
+  ),
+  asyncHandler(async (req, res) => {
+    const resume = await loadOwnedResume(req);
+    const version = await loadVersion(resume._id, req.params.versionId);
+    res.json({ version });
+  })
+);
+
 router.delete(
   "/:id",
   validate(idParam, "params"),
