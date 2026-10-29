@@ -1,9 +1,9 @@
-const {GoogleGenAI,Type} = require("@google/genai");
+const {Type} = require("@google/genai");
 const { z } = require("zod");
 
-const env = require("../config/env");
-
-const ai = env.geminiApiKey ? new GoogleGenAI({apiKey : env.geminiApiKey}) : null;
+const { ai } = require("../shared/gemini/client");
+const { runGemini, isTransientError: sharedIsTransientError } = require("../shared/gemini/runGemini");
+const { normalizeSkillList, skillLabel } = require("./normalizeSkills");
 
 const linkSchema = {
     type : Type.OBJECT,
@@ -196,40 +196,98 @@ const EMPTY = {
     languages : [],
     interests : [],
 };
+function isTransientError(err) {
+  // Shared classification — one source of truth in shared/gemini/runGemini.js.
+  return sharedIsTransientError(err);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Post-parse sanitation shared by the parse pipeline: drop hallucinated,
+// empty or oversized tech tags before anything is persisted.
+function sanitizeProjectTech(parsed) {
+  if (Array.isArray(parsed.projects)) {
+    for (const p of parsed.projects) {
+      if (Array.isArray(p.tech)) {
+        p.tech = p.tech
+          .filter((t) => typeof t === "string" && t.trim().length > 0 && t.trim().length < 80)
+          .slice(0, 15);
+      }
+    }
+  }
+
+  // Put the resume's skills into the platform-wide canonical vocabulary so they
+  // can be compared against a JD's required skills (services/normalizeSkills.js).
+  // Without this, "ReactJS" on a resume would never match "React" in a JD and
+  // every student would show a false skill gap.
+  if (Array.isArray(parsed.skills)) {
+    parsed.skills = normalizeSkillList(parsed.skills).map(skillLabel);
+  }
+  if (Array.isArray(parsed.projects)) {
+    for (const p of parsed.projects) {
+      if (Array.isArray(p.tech) && p.tech.length) {
+        p.tech = normalizeSkillList(p.tech).map(skillLabel);
+      }
+    }
+  }
+
+  return parsed;
+}
+
 async function parseResume(rawText) {
   if (!ai || !rawText?.trim()) return EMPTY;
 
   const prompt = buildPrompt(rawText);
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const result = await ai.models.generateContent({
-        model: env.geminiModel,
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema,
-          temperature: 0.1,
-        },
-      });
+  try {
+    const { data } = await runGemini({
+      label: "Structured parse",
+      zodSchema: validator,
+      retriesPerModel: 2,
+      backoffMs: 1000,
+      call: async (modelName) => {
+        const result = await ai.models.generateContent({
+          model: modelName,
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema,
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          },
+        });
 
-      const text = typeof result.text === "function"
-        ? result.text()
-        : result.text;
+        const text = typeof result.text === "function"
+          ? result.text()
+          : result.text;
+        return { text, usage: result.usageMetadata || {} };
+      },
+      onError: (attempt, modelName, err) => {
+        console.warn(
+          `Structured parse attempt ${attempt} with ${modelName} failed:`,
+          err.message || err
+        );
+      },
+    });
 
-      if (!text) throw new Error("Empty response");
-
-      const parsed = JSON.parse(text);
-      return validator.parse(parsed);
-
-    } catch (err) {
-      if (attempt === 2) {
-        console.error("Structured parse failed:", err.message);
-        return EMPTY;
-      }
-    }
+    return sanitizeProjectTech(data);
+  } catch (err) {
+    // Every model in the cascade failed. Returning EMPTY here would silently
+    // create a resume with blank sections while reporting success to the user —
+    // they would see an empty resume and no error. Fail loudly instead so the
+    // caller aborts the upload and the user gets a retryable message.
+    console.error("Structured parse failed across all models.");
+    const wrapped = new Error(
+      "Could not read your resume right now — the parsing service is unavailable."
+    );
+    wrapped.statusCode = 503;
+    wrapped.isOperational = true;
+    wrapped.isAiFailure = true;
+    wrapped.cause = err;
+    throw wrapped;
   }
-  return EMPTY;
 }
 
 module.exports = {parseResume};

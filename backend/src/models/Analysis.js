@@ -99,6 +99,20 @@ const analysisSchema = new mongoose.Schema(
       default: [],
     },
 
+    // Resume-ready phrases that insert each missing keyword into the document.
+    keywordsToAdd: {
+      type: [
+        new mongoose.Schema(
+          {
+            keyword: String,
+            phrase: String,
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
     summary: {
       type: String,
       default: "",

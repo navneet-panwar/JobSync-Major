@@ -1,7 +1,7 @@
 {
-  "name": "ai-resume-roaster-backend",
-  "version": "0.1.0",
-  "description": "Backend for the AI Resume Roaster - ATS scoring, rewrites, version history",
+  "name": "jobsync-backend",
+  "version": "0.2.0",
+  "description": "JobSync backend — shared auth, resume intelligence, JD matching, readiness scoring, placement-cell gatekeeping",
   "main": "src/server.js",
   "type": "commonjs",
   "engines": {
@@ -10,7 +10,9 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "test:roles": "node scripts/test-roles-tags.js",
+    "test:fixes": "node scripts/test-fixes.js"
   },
   "dependencies": {
     "@google/genai": "2.6.0",
@@ -21,10 +23,14 @@
     "dotenv": "17.4.2",
     "express": "5.2.1",
     "express-rate-limit": "8.7.0",
+    "ics": "^3.12.0",
     "jsonwebtoken": "9.0.3",
     "mongoose": "9.10.1",
     "morgan": "1.12.1",
     "multer": "2.4.0",
+    "nanoid": "^6.0.1",
+    "nodemailer": "^10.0.13",
+    "p-queue": "^9.3.3",
     "pdf-parse": "2.4.5",
     "zod": "4.6.5"
   },

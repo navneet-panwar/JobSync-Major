@@ -35,6 +35,17 @@ class ApiError extends Error {
     static internal(message = "Internal server error") {
         return new ApiError(500, message);
     }
+
+    // Upstream AI provider failed (quota, outage, bad key, malformed reply).
+    // 503 signals "the dependency is unavailable, retrying may work" — which is
+    // materially different from a 500 ("your code is broken"). Keeping them
+    // separate means a Gemini outage never looks like an application bug in the
+    // logs, and the client can safely offer a retry.
+    static aiUnavailable(message = "AI service is temporarily unavailable") {
+        const err = new ApiError(503, message);
+        err.isAiFailure = true;
+        return err;
+    }
 }
 
 module.exports = ApiError;

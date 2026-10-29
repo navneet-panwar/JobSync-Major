@@ -15,6 +15,12 @@ const resumeSchema = new mongoose.Schema(
             default : null,
         },
         latestVersionNumber : {type : Number,default : 0},
+
+        // sha256 of the uploaded text. Used for duplicate detection across
+        // accounts in the same college (scope §12.1): the same resume under two
+        // different emails is a cheap, non-punitive signal for the placement
+        // cell, not an automatic rejection.
+        contentHash : {type : String,default : "",index : true},
     },
     {timestamps : true}
 );  
